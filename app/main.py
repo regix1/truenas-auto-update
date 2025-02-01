@@ -34,10 +34,10 @@ if not BASE_URL or not API_KEY:
     send_notification("Configuration Error", "BASE_URL or API_KEY is not set")
     exit(1)
 
-# Ensure no trailing slash and add API version path
+# Normalize the base URL and append the API version
 BASE_URL = BASE_URL.rstrip("/") + "/api/v2.0"
 
-# --- Step 1: Get installed chart releases ---
+# --- Step 1: Retrieve installed chart releases ---
 try:
     response = requests.get(
         f"{BASE_URL}/chart/release",
@@ -56,13 +56,13 @@ if response.status_code != 200:
 
 releases = response.json()
 
-# --- Step 2: Filter for releases that need an update ---
-# We consider a release as needing an update if either update_available or container_images_update_available is truthy.
+# --- Step 2: Determine which releases need an update ---
+# We consider a release in need of an update if either update_available or
+# container_images_update_available is truthy.
 def needs_update(release):
     return release.get("update_available") or release.get("container_images_update_available")
 
 releases_to_upgrade = [r for r in releases if needs_update(r)]
-
 logger.info(f"Found {len(releases_to_upgrade)} chart release(s) that need an update")
 
 # --- Helper: Wait for an asynchronous job to complete ---
@@ -87,19 +87,24 @@ def await_job(job_id):
 
 # --- Step 3: Loop over each release and trigger an upgrade ---
 for release in releases_to_upgrade:
-    # Use "release_name" if available, otherwise fallback to "id"
-    release_identifier = release.get("release_name") or release.get("id")
+    # Try to get the release name from multiple possible locations:
+    release_identifier = (
+        release.get("release_name")
+        or release.get("config", {}).get("release_name")
+        or release.get("id")
+    )
     if not release_identifier:
-        logger.warning("Found a release without a valid release name or id; skipping.")
+        logger.warning("Found a release without a valid identifier; skipping.")
         continue
 
     logger.info(f"Upgrading chart release {release_identifier}...")
 
     try:
+        # Note: We now use the key "release" in the payload, as required by the API.
         upgrade_response = requests.post(
             f"{BASE_URL}/chart/upgrade",
             headers={"Authorization": f"Bearer {API_KEY}"},
-            json={"release_name": release_identifier},
+            json={"release": release_identifier},
             verify=False,
         )
     except Exception as e:
@@ -114,7 +119,7 @@ for release in releases_to_upgrade:
         send_notification("Upgrade Failed", error_msg)
         continue
 
-    # Assuming the response returns the job id as plain text
+    # Assuming the API returns a job ID as plain text.
     job_id = upgrade_response.text.strip()
     job_result = await_job(job_id)
 
