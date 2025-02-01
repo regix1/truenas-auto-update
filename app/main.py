@@ -39,7 +39,7 @@ BASE_URL = BASE_URL.rstrip("/") + "/api/v2.0"
 
 # --- Step 1: Get installed chart releases ---
 try:
-    # Note: the old /app endpoint has been replaced with /chart/release
+    # Use the /chart/release endpoint for installed apps
     response = requests.get(
         f"{BASE_URL}/chart/release",
         headers={"Authorization": f"Bearer {API_KEY}"},
@@ -57,11 +57,15 @@ if response.status_code != 200:
 
 releases = response.json()
 
-# --- Step 2: Filter for releases with an update available ---
-# (The new API uses "update_available" instead of "upgrade_available")
-releases_to_upgrade = [r for r in releases if r.get("update_available")]
+# --- Step 2: Filter for releases that need an update ---
+# In your case, the custom app isn't flagged with update_available but
+# it does have container_images_update_available set to true.
+def needs_update(release):
+    return release.get("update_available") or release.get("container_images_update_available")
 
-logger.info(f"Found {len(releases_to_upgrade)} chart release(s) with update available")
+releases_to_upgrade = [r for r in releases if needs_update(r)]
+
+logger.info(f"Found {len(releases_to_upgrade)} chart release(s) that need an update")
 
 # --- Helper: Wait for an asynchronous job to complete ---
 def await_job(job_id):
