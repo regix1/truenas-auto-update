@@ -39,7 +39,6 @@ BASE_URL = BASE_URL.rstrip("/") + "/api/v2.0"
 
 # --- Step 1: Get installed chart releases ---
 try:
-    # Use the /chart/release endpoint for installed apps
     response = requests.get(
         f"{BASE_URL}/chart/release",
         headers={"Authorization": f"Bearer {API_KEY}"},
@@ -58,8 +57,7 @@ if response.status_code != 200:
 releases = response.json()
 
 # --- Step 2: Filter for releases that need an update ---
-# In your case, the custom app isn't flagged with update_available but
-# it does have container_images_update_available set to true.
+# We consider a release as needing an update if either update_available or container_images_update_available is truthy.
 def needs_update(release):
     return release.get("update_available") or release.get("container_images_update_available")
 
@@ -89,29 +87,29 @@ def await_job(job_id):
 
 # --- Step 3: Loop over each release and trigger an upgrade ---
 for release in releases_to_upgrade:
-    release_name = release.get("release_name")
-    if not release_name:
-        logger.warning("Found a release without a release_name; skipping.")
+    # Use "release_name" if available, otherwise fallback to "id"
+    release_identifier = release.get("release_name") or release.get("id")
+    if not release_identifier:
+        logger.warning("Found a release without a valid release name or id; skipping.")
         continue
 
-    logger.info(f"Upgrading chart release {release_name}...")
+    logger.info(f"Upgrading chart release {release_identifier}...")
 
     try:
-        # The upgrade endpoint is now under /chart/upgrade
         upgrade_response = requests.post(
             f"{BASE_URL}/chart/upgrade",
             headers={"Authorization": f"Bearer {API_KEY}"},
-            json={"release_name": release_name},
+            json={"release_name": release_identifier},
             verify=False,
         )
     except Exception as e:
-        error_msg = f"Exception while upgrading {release_name}: {str(e)}"
+        error_msg = f"Exception while upgrading {release_identifier}: {str(e)}"
         logger.error(error_msg)
         send_notification("Upgrade Failed", error_msg)
         continue
 
     if upgrade_response.status_code != 200:
-        error_msg = f"Failed to trigger upgrade for {release_name}: {upgrade_response.status_code}"
+        error_msg = f"Failed to trigger upgrade for {release_identifier}: {upgrade_response.status_code}"
         logger.error(error_msg)
         send_notification("Upgrade Failed", error_msg)
         continue
@@ -121,12 +119,12 @@ for release in releases_to_upgrade:
     job_result = await_job(job_id)
 
     if job_result and job_result.status_code == 200:
-        success_msg = f"Upgrade for {release_name} triggered successfully"
+        success_msg = f"Upgrade for {release_identifier} triggered successfully"
         logger.info(success_msg)
         if NOTIFY_ON_SUCCESS:
-            send_notification("Chart Updated", f"Successfully updated {release_name}")
+            send_notification("Chart Updated", f"Successfully updated {release_identifier}")
     else:
-        error_msg = f"Upgrade job for {release_name} failed or did not complete successfully."
+        error_msg = f"Upgrade job for {release_identifier} failed or did not complete successfully."
         logger.error(error_msg)
         send_notification("Upgrade Failed", error_msg)
 
