@@ -21,20 +21,18 @@ if APPRISE_URLS:
     for url in APPRISE_URLS.split(","):
         apobj.add(url.strip())
 
-
 def send_notification(title, message):
     """Send a notification if Apprise URLs have been provided."""
     if APPRISE_URLS:
         apobj.notify(title=title, body=message)
         logger.info(f"Notification sent: {title}")
 
-
 if not BASE_URL or not API_KEY:
     logger.error("BASE_URL or API_KEY is not set")
     send_notification("Configuration Error", "BASE_URL or API_KEY is not set")
     exit(1)
 
-# Normalize the base URL and append the API version
+# Normalize the base URL to ensure no trailing slash, and add the API path
 BASE_URL = BASE_URL.rstrip("/") + "/api/v2.0"
 
 # --- Step 1: Retrieve installed chart releases ---
@@ -56,9 +54,7 @@ if response.status_code != 200:
 
 releases = response.json()
 
-# --- Step 2: Determine which releases need an update ---
-# We consider a release in need of an update if either update_available or
-# container_images_update_available is truthy.
+# --- Step 2: Filter releases that need an update ---
 def needs_update(release):
     return release.get("update_available") or release.get("container_images_update_available")
 
@@ -87,7 +83,7 @@ def await_job(job_id):
 
 # --- Step 3: Loop over each release and trigger an upgrade ---
 for release in releases_to_upgrade:
-    # Try to get the release name from multiple possible locations:
+    # Try to use the release_name from the top-level, then from config, then fall back to the "id"
     release_identifier = (
         release.get("release_name")
         or release.get("config", {}).get("release_name")
@@ -100,11 +96,11 @@ for release in releases_to_upgrade:
     logger.info(f"Upgrading chart release {release_identifier}...")
 
     try:
-        # Note: We now use the key "release" in the payload, as required by the API.
+        # Use the corrected endpoint for upgrades
         upgrade_response = requests.post(
-            f"{BASE_URL}/chart/upgrade",
+            f"{BASE_URL}/chart/release/upgrade",
             headers={"Authorization": f"Bearer {API_KEY}"},
-            json={"release": release_identifier},
+            json={"release_name": release_identifier},
             verify=False,
         )
     except Exception as e:
@@ -119,7 +115,7 @@ for release in releases_to_upgrade:
         send_notification("Upgrade Failed", error_msg)
         continue
 
-    # Assuming the API returns a job ID as plain text.
+    # Assuming the API returns the job id as plain text
     job_id = upgrade_response.text.strip()
     job_result = await_job(job_id)
 
