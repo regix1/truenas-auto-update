@@ -1,24 +1,25 @@
 #!/bin/bash
+set -e
 
 if [ -n "$CRON_SCHEDULE" ]; then
-    # Set up environment variables for cron
-    printenv | grep -v "no_proxy" >> /etc/environment
+    echo "Setting up cron with schedule: $CRON_SCHEDULE"
 
-    # Process the crontab file with environment variables
-    envsubst < /etc/cron.d/app-cron > /etc/cron.d/app-cron.tmp
-    mv /etc/cron.d/app-cron.tmp /etc/cron.d/app-cron
+    # Create a cron file on the fly with environment variables passed along
+    cat <<EOF > /etc/cron.d/app-cron
+$CRON_SCHEDULE cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+EOF
+
     chmod 0644 /etc/cron.d/app-cron
-
-    # Install cron job
     crontab /etc/cron.d/app-cron
 
-    # Start cron service
-    service cron start
+    # Export environment variables for cron jobs (exclude no_proxy if necessary)
+    printenv | grep -v "no_proxy" >> /etc/environment
 
-    echo "Cron job installed with schedule: $CRON_SCHEDULE"
-    echo "Watching logs..."
+    # Start cron service and tail the log
+    service cron start
+    echo "Cron job installed. Watching logs..."
     tail -f /var/log/cron.log
 else
     echo "No CRON_SCHEDULE set, running script once..."
-    python main.py
+    exec python main.py
 fi
