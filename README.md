@@ -18,7 +18,7 @@ Automatically update TrueNAS SCALE applications with a simple Docker container t
 docker run -e BASE_URL=https://truenas.local \
            -e API_KEY=your-api-key \
            -e CRON_SCHEDULE="0 2 * * *" \
-           ghcr.io/your-username/truenas-chart-updater:latest
+           ghcr.io/regix1/truenas-chart-updater:latest
 ```
 
 ### Docker Compose
