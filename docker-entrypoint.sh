@@ -39,14 +39,23 @@ if [ -n "$CRON_SCHEDULE" ]; then
     cat <<EOF > /etc/cron.d/app-cron
 $CRON_SCHEDULE cd /app && python app.py >> /var/log/cron.log 2>&1
 # Empty line is required for valid cron file
+
 EOF
     
     # Set proper permissions
     chmod 0644 /etc/cron.d/app-cron
     crontab /etc/cron.d/app-cron
     
-    # Export environment variables for cron jobs
-    env | grep -v "no_proxy" > /etc/environment
+    # Handle locale settings properly (fix for the deprecation warning)
+    mkdir -p /etc/default
+    echo "LANG=C.UTF-8" > /etc/default/locale
+    
+    # Export other environment variables for cron jobs
+    mkdir -p /app/env
+    env | grep -v "LANG=" | grep -v "LC_" | grep -v "no_proxy" > /app/env/cron-env
+    
+    # Modify the cron job to source environment variables
+    sed -i "s|cd /app && python|cd /app \&\& . /app/env/cron-env \&\& python|" /etc/cron.d/app-cron
     
     # Start cron service and tail the log
     service cron start

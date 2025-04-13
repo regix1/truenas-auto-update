@@ -2,8 +2,13 @@ FROM python:3.12-slim
 
 # Install cron for scheduling
 RUN apt-get update && \
-    apt-get install -y cron && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y cron locales && \
+    rm -rf /var/lib/apt/lists/* && \
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+
+# Set locale
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 # Set working directory
 WORKDIR /app
