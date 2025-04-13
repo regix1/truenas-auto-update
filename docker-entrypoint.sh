@@ -1,21 +1,47 @@
 #!/bin/bash
 set -e
 
-# Function to validate cron schedule
+# Function to validate cron schedule with better checking
 validate_cron_schedule() {
     local schedule="$1"
     
-    # Count the fields (should be 5)
-    field_count=$(echo "$schedule" | awk '{print NF}')
-    
-    if [[ $field_count -ne 5 ]]; then
+    # Basic validation - make sure there are 5 fields with spaces between them
+    if ! [[ "$schedule" =~ ^[0-9*/-]+(\ [0-9*/-]+){4}$ ]]; then
         echo "ERROR: Invalid cron schedule format: '$schedule'"
-        echo "ERROR: Cron schedule must have 5 fields (minute hour day month weekday)"
-        echo "ERROR: Example of valid schedule: '0 2 * * *' (runs at 2:00 AM daily)"
+        echo "ERROR: Cron schedule must have 5 fields separated by spaces (minute hour day month weekday)"
+        echo "ERROR: Example of valid schedule: '0 5 * * *' (runs at 5:00 AM daily)"
         return 1
     fi
     
     return 0
+}
+
+# Function to get TrueNAS version info
+get_truenas_info() {
+    if [ -z "$BASE_URL" ] || [ -z "$API_KEY" ]; then
+        echo "WARNING: BASE_URL or API_KEY not set, cannot retrieve TrueNAS info"
+        return 1
+    fi
+    
+    echo "Connecting to TrueNAS at $BASE_URL..."
+    
+    # Try to get system info using REST API
+    response=$(curl -s -k -H "Authorization: Bearer $API_KEY" "$BASE_URL/api/v2.0/system/info" || echo '{"error": "Connection failed"}')
+    
+    # Check if response contains version info
+    if echo "$response" | grep -q "version"; then
+        version=$(echo "$response" | grep -o '"version":[^,}]*' | cut -d'"' -f4)
+        hostname=$(echo "$response" | grep -o '"hostname":[^,}]*' | cut -d'"' -f4)
+        echo "TrueNAS Info:"
+        echo "  Hostname: $hostname"
+        echo "  Version:  $version"
+        echo "  API:      REST"
+    elif echo "$response" | grep -q "error"; then
+        echo "ERROR: Could not connect to TrueNAS API"
+        echo "Response: $response"
+    else
+        echo "WARNING: Unknown response format"
+    fi
 }
 
 # Print banner
@@ -23,6 +49,9 @@ echo "====================================================="
 echo "TrueNAS Auto Update"
 echo "$(date)"
 echo "====================================================="
+
+# Get TrueNAS info at startup
+get_truenas_info
 
 # Check which scheduling method to use
 if [ -n "$CRON_SCHEDULE" ]; then
