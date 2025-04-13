@@ -1,4 +1,4 @@
-# TrueNAS Chart Updater
+# TrueNAS Auto Update
 
 Automatically update TrueNAS SCALE applications with a simple Docker container that works with both TrueNAS 24.04 (Dragonfish) and 25.04+ (Elastic Eel).
 
@@ -18,7 +18,7 @@ Automatically update TrueNAS SCALE applications with a simple Docker container t
 docker run -e BASE_URL=https://truenas.local \
            -e API_KEY=your-api-key \
            -e CRON_SCHEDULE="0 2 * * *" \
-           ghcr.io/regix1/truenas-chart-updater:latest
+           ghcr.io/regix1/truenas-auto-update:latest
 ```
 
 ### Docker Compose
@@ -27,8 +27,8 @@ docker run -e BASE_URL=https://truenas.local \
 version: '3'
 services:
   chart-updater:
-    image: ghcr.io/regix1/truenas-chart-updater:latest
-    container_name: truenas-chart-updater
+    image: ghcr.io/regix1/truenas-auto-update:latest
+    container_name: truenas-auto-update
     environment:
       - BASE_URL=https://truenas.local
       - API_KEY=your-api-key
@@ -75,9 +75,9 @@ Run every X seconds:
 ## Building Locally
 
 ```bash
-git clone https://github.com/regix1/truenas-chart-updater.git
-cd truenas-chart-updater
-docker build -t truenas-chart-updater .
+git clone https://github.com/regix1/truenas-auto-update.git
+cd truenas-auto-update
+docker build -t truenas-auto-update .
 ```
 
 ## License
