@@ -27,7 +27,7 @@ docker run -e BASE_URL=https://truenas.local \
 version: '3'
 services:
   chart-updater:
-    image: ghcr.io/your-username/truenas-chart-updater:latest
+    image: ghcr.io/regix1/truenas-chart-updater:latest
     container_name: truenas-chart-updater
     environment:
       - BASE_URL=https://truenas.local
