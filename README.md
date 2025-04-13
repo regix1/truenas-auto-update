@@ -75,7 +75,7 @@ Run every X seconds:
 ## Building Locally
 
 ```bash
-git clone https://github.com/your-username/truenas-chart-updater.git
+git clone https://github.com/regix1/truenas-chart-updater.git
 cd truenas-chart-updater
 docker build -t truenas-chart-updater .
 ```
