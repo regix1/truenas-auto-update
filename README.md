@@ -1,39 +1,91 @@
-# TrueNAS Auto Update
+# TrueNAS Chart Updater
 
-Yes, I know what you're thinking - "You shouldn't auto-update your TrueNAS apps!" And you're probably right. But if you're feeling adventurous and want to live on the edge, this Docker container will automatically update your TrueNAS SCALE apps whenever updates are available.
+Automatically update TrueNAS SCALE applications with a simple Docker container that works with both TrueNAS 24.04 (Dragonfish) and 25.04+ (Elastic Eel).
+
+## Features
+
+- Auto-detects TrueNAS version and uses the appropriate API
+- Supports both REST API (for 24.04 and earlier) and WebSocket API (for 25.04+)
+- Flexible scheduling options (cron or interval-based)
+- Optional notifications via Apprise
+- Lightweight container with minimal dependencies
+
+## Usage
+
+### Docker Run
+
+```bash
+docker run -e BASE_URL=https://truenas.local \
+           -e API_KEY=your-api-key \
+           -e CRON_SCHEDULE="0 2 * * *" \
+           ghcr.io/your-username/truenas-chart-updater:latest
+```
+
+### Docker Compose
+
+```yaml
+version: '3'
+services:
+  chart-updater:
+    image: ghcr.io/your-username/truenas-chart-updater:latest
+    container_name: truenas-chart-updater
+    environment:
+      - BASE_URL=https://truenas.local
+      - API_KEY=your-api-key
+      - CRON_SCHEDULE=0 2 * * *  # Run at 2 AM daily
+      # OR use interval-based scheduling instead:
+      # - INTERVAL_SECONDS=3600  # Run every hour
+      - APPRISE_URLS=telegram://bottoken/chatid  # Optional
+      - NOTIFY_ON_SUCCESS=false  # Optional
+    restart: unless-stopped
+```
 
 ## Environment Variables
 
-- `BASE_URL`: Your TrueNAS SCALE instance URL (e.g., `https://truenas.local`)
-- `API_KEY`: Your TrueNAS API key (can be generated in the UI under System Settings → API Keys)
-- `CRON_SCHEDULE`: Cron schedule for when to check for updates (e.g., `0 4 * * *` for daily at 4 AM). If not set, the script will run once and then exit.
-- `APPRISE_URLS`: Apprise URLs to send notifications to (e.g., `https://example.com/apprise,https://example.com/apprise2`) More info on [Apprise](https://github.com/caronc/apprise)
-- `NOTIFY_ON_SUCCESS`: Set to "true" to receive notifications when apps are successfully updated (default: "false")
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `BASE_URL` | URL of your TrueNAS instance | Yes |
+| `API_KEY` | TrueNAS API key | Yes |
+| `CRON_SCHEDULE` | Cron schedule expression (e.g., `0 2 * * *` for 2 AM daily) | No* |
+| `INTERVAL_SECONDS` | Run every X seconds | No* |
+| `APPRISE_URLS` | Comma-separated notification URLs for Apprise | No |
+| `NOTIFY_ON_SUCCESS` | Set to "true" to notify on successful updates | No |
+| `FORCE_WEBSOCKET` | Set to "true" to force using WebSocket API | No |
 
-## Getting Started
+* At least one of `CRON_SCHEDULE` or `INTERVAL_SECONDS` is recommended, otherwise the script runs once and exits
 
-1. Generate an API key in your TrueNAS SCALE UI:
+## Scheduling Options
 
-   - Go to System Settings → API Keys
-   - Click "Add"
-   - Give it a name and save
+### Cron Schedule
 
-2. Run the container:
+Use standard cron syntax to run at specific times:
 
-```bash
-docker run --name truenas-auto-update \
-         --restart unless-stopped \
-         -e BASE_URL=https://your-truenas-url \
-         -e API_KEY=your-api-key \
-         -e CRON_SCHEDULE="0 4 * * *" \
-         -e APPRISE_URLS="https://example.com/apprise,https://example.com/apprise2" \
-         -e NOTIFY_ON_SUCCESS="true" \
-         ghcr.io/marvinvr/truenas-auto-update
+```
+- CRON_SCHEDULE=0 2 * * *  # Run at 2 AM daily
 ```
 
-## Disclaimer
+### Interval-based
 
+Run every X seconds:
+
+```
+- INTERVAL_SECONDS=86400  # Run every 24 hours
+```
+
+## Building Locally
+
+```bash
+git clone https://github.com/your-username/truenas-chart-updater.git
+cd truenas-chart-updater
+docker build -t truenas-chart-updater .
+```
+
+## License
+
+MIT
+
+## Disclaimer
 This tool automatically updates your TrueNAS SCALE apps without manual intervention. While convenient, this could potentially lead to issues if an update introduces problems. Use at your own risk and make sure you have proper backups!
 
-Cheers,
+Cheers,  
 [marvinvr](https://github.com/marvinvr)
