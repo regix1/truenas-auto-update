@@ -1,18 +1,22 @@
 #!/bin/bash
 set -e
 
-# Function to validate cron schedule with better checking
+# Function to validate cron schedule with strict checking
 validate_cron_schedule() {
     local schedule="$1"
     
-    # Basic validation - make sure there are 5 fields with spaces between them
-    if ! [[ "$schedule" =~ ^[0-9*/-]+(\ [0-9*/-]+){4}$ ]]; then
+    # Split schedule into fields
+    read -r -a fields <<< "$schedule"
+    
+    # Check exact field count
+    if [ ${#fields[@]} -ne 5 ]; then
         echo "ERROR: Invalid cron schedule format: '$schedule'"
-        echo "ERROR: Cron schedule must have 5 fields separated by spaces (minute hour day month weekday)"
+        echo "ERROR: Cron schedule must have exactly 5 fields (minute hour day month weekday)"
         echo "ERROR: Example of valid schedule: '0 5 * * *' (runs at 5:00 AM daily)"
         return 1
     fi
     
+    echo "Valid cron schedule with 5 fields: '${fields[0]} ${fields[1]} ${fields[2]} ${fields[3]} ${fields[4]}'"
     return 0
 }
 
@@ -26,7 +30,7 @@ get_truenas_info() {
     echo "Connecting to TrueNAS at $BASE_URL..."
     
     # Try to get system info using REST API
-    response=$(curl -s -k -H "Authorization: Bearer $API_KEY" "$BASE_URL/api/v2.0/system/info" || echo '{"error": "Connection failed"}')
+    response=$(curl -s -k -H "Authorization: Bearer $API_KEY" "$BASE_URL/api/v2.0/system/info" 2>/dev/null || echo '{"error": "Connection failed"}')
     
     # Check if response contains version info
     if echo "$response" | grep -q "version"; then
