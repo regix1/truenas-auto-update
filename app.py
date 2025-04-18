@@ -239,6 +239,23 @@ class TrueNASWebSocketAPI:
             logger.error(f"WebSocket call failed: {str(e)}")
             self.connected = False
             return None
+    
+    def get_chart_releases(self):
+        logger.info("Fetching chart releases via WebSocket API...")
+        releases = self.call("chart.release.query")
+        if releases:
+            logger.info(f"Retrieved {len(releases)} chart releases")
+        else:
+            logger.error("Failed to retrieve chart releases")
+        return releases
+    
+    def upgrade_chart_release(self, release_name):
+        logger.info(f"Triggering upgrade for {release_name} via WebSocket API...")
+        return self.call("chart.release.upgrade", [release_name])
+    
+    def wait_for_job(self, job_id):
+        logger.info(f"Waiting for job {job_id} to complete...")
+        return self.call("core.job_wait", [job_id])
 
 # REST API implementation
 class TrueNASRestAPI:
