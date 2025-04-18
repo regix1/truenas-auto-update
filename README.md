@@ -177,4 +177,10 @@ docker build -t truenas-auto-update .
 MIT
 
 ## Disclaimer
+Message from the original developer:
 This tool automatically updates your TrueNAS SCALE apps without manual intervention. While convenient, this could potentially lead to issues if an update introduces problems. Use at your own risk and make sure you have proper backups!
+
+Cheers,
+[marvinvr](https://github.com/marvinvr)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
