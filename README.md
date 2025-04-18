@@ -30,17 +30,26 @@ docker run -e BASE_URL=https://truenas.local \
 version: '3'
 services:
   truenas-auto-update:
-    image: ghcr.io/regix1/truenas-auto-update:latest
     container_name: truenas-auto-update
+    image: ghcr.io/regix1/truenas-auto-update
     environment:
-      - BASE_URL=https://truenas.local
-      - API_KEY=your-api-key
-      - CRON_SCHEDULE=0 2 * * *  # Run at 2 AM daily
-      # OR use interval-based scheduling instead:
-      # - INTERVAL_SECONDS=3600  # Run every hour
-      - APPRISE_URLS=telegram://bottoken/chatid  # Optional
-      - NOTIFY_ON_SUCCESS=false  # Optional
-      - TZ=America/Chicago  # Set your timezone
+      - BASE_URL=172.16.1.144
+      - API_KEY=1-GtF52L9uraHfHM2j4774DrsrMdckHOjyjMBWv1e6AlEEUXbVzwG3eq8LnQapq4vJ
+      # Alternative authentication method (only needed if not using API_KEY)
+      # - USERNAME=admin
+      # - PASSWORD=your_password
+      # SSL settings
+      - USE_SSL=false
+      - VERIFY_SSL=false
+      # Update schedule
+      # - CRON_SCHEDULE=0 5 * * *
+      - INTERVAL_SECONDS=30
+      # Notification settings
+      - NOTIFY_ON_SUCCESS=true
+      # Optional notification methods (if configured)
+      # - APPRISE_URLS=telegram://bot_token/chat_id
+      # Timezone
+      - TZ=America/Chicago
     restart: unless-stopped
 ```
 
