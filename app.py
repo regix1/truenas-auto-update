@@ -135,36 +135,37 @@ class TrueNASWebSocketAPI:
         self.ws = None
         self.call_id = 1
         self.connected = False
+        self.session_id = None
         logger.info(f"Initializing WebSocket API client at {self.ws_url}")
         
     def connect(self):
         try:
             logger.info(f"Connecting to WebSocket API...")
+            # Set a reasonable timeout for the connection (10 seconds)
             self.ws = websocket.create_connection(
                 self.ws_url,
-                header={"Authorization": f"Bearer {self.api_key}"}
+                header={"Authorization": f"Bearer {self.api_key}"},
+                timeout=10
             )
             
-            # Handle initial hello message
-            hello = json.loads(self.ws.recv())
-            logger.debug(f"Received initial message: {hello}")
-            
-            # Send connect message
+            # Send the initial connect message per DDP protocol
             connect_request = {
-                "id": self.call_id,
                 "msg": "connect",
                 "version": "1",
                 "support": ["1"]
             }
-            self.call_id += 1
+            logger.debug(f"Sending connect message: {connect_request}")
             self.ws.send(json.dumps(connect_request))
             
-            # Process connect response
+            # Wait for connected response with timeout
+            self.ws.settimeout(5)
             connect_response = json.loads(self.ws.recv())
+            logger.debug(f"Received response: {connect_response}")
             
             if connect_response.get("msg") == "connected":
+                self.session_id = connect_response.get("session")
                 self.connected = True
-                logger.info("Connected to TrueNAS WebSocket API successfully")
+                logger.info(f"Connected to TrueNAS WebSocket API successfully (Session: {self.session_id})")
                 return True
             else:
                 logger.error(f"Failed to connect: {connect_response}")
@@ -172,13 +173,25 @@ class TrueNASWebSocketAPI:
                 
         except Exception as e:
             logger.error(f"Failed to connect to WebSocket: {str(e)}")
+            if self.ws:
+                try:
+                    self.ws.close()
+                except:
+                    pass
+                self.ws = None
             return False
     
     def disconnect(self):
         if self.ws:
-            self.ws.close()
-            self.connected = False
-            logger.info("Disconnected from TrueNAS WebSocket API")
+            try:
+                self.ws.close()
+            except Exception as e:
+                logger.error(f"Error closing WebSocket: {str(e)}")
+            finally:
+                self.ws = None
+                self.connected = False
+                self.session_id = None
+                logger.info("Disconnected from TrueNAS WebSocket API")
     
     def call(self, method, params=None):
         if not self.connected:
@@ -189,7 +202,7 @@ class TrueNASWebSocketAPI:
         self.call_id += 1
         
         request = {
-            "id": call_id,
+            "id": str(call_id),  # Convert to string to match DDP protocol
             "msg": "method",
             "method": method,
             "params": params or []
@@ -199,38 +212,33 @@ class TrueNASWebSocketAPI:
             logger.debug(f"Sending method call: {method} (ID: {call_id})")
             self.ws.send(json.dumps(request))
             
+            # Set reasonable timeout for response
+            self.ws.settimeout(30)
+            
             while True:
-                response = json.loads(self.ws.recv())
-                
-                if response.get("id") == call_id:
-                    if "error" in response:
-                        logger.error(f"API error: {response['error']}")
-                        return None
+                try:
+                    response = json.loads(self.ws.recv())
+                    logger.debug(f"Received response: {response}")
                     
-                    return response.get("result")
+                    # Check if this is our response
+                    if response.get("id") == str(call_id) and response.get("msg") == "result":
+                        if "error" in response:
+                            logger.error(f"API error: {response['error']}")
+                            return None
+                        
+                        return response.get("result")
+                    
+                    # If not our response, log and continue waiting
+                    logger.debug(f"Received message with ID {response.get('id')}, expecting {call_id}")
+                    
+                except websocket.WebSocketTimeoutException:
+                    logger.error(f"Timeout waiting for response to method call: {method}")
+                    return None
                 
-                logger.debug(f"Received message with ID {response.get('id')}, expecting {call_id}")
         except Exception as e:
             logger.error(f"WebSocket call failed: {str(e)}")
             self.connected = False
             return None
-    
-    def get_chart_releases(self):
-        logger.info("Fetching chart releases via WebSocket API...")
-        releases = self.call("chart.release.query")
-        if releases:
-            logger.info(f"Retrieved {len(releases)} chart releases")
-        else:
-            logger.error("Failed to retrieve chart releases")
-        return releases
-    
-    def upgrade_chart_release(self, release_name):
-        logger.info(f"Triggering upgrade for {release_name} via WebSocket API...")
-        return self.call("chart.release.upgrade", [release_name])
-    
-    def wait_for_job(self, job_id):
-        logger.info(f"Waiting for job {job_id} to complete...")
-        return self.call("core.job_wait", [job_id])
 
 # REST API implementation
 class TrueNASRestAPI:
