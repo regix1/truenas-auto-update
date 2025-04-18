@@ -141,14 +141,13 @@ class TrueNASWebSocketAPI:
     def connect(self):
         try:
             logger.info(f"Connecting to WebSocket API...")
-            # Set a reasonable timeout for the connection (10 seconds)
             self.ws = websocket.create_connection(
                 self.ws_url,
                 header={"Authorization": f"Bearer {self.api_key}"},
                 timeout=10
             )
             
-            # Send the initial connect message per DDP protocol
+            # Send the initial connect message
             connect_request = {
                 "msg": "connect",
                 "version": "1",
@@ -157,7 +156,7 @@ class TrueNASWebSocketAPI:
             logger.debug(f"Sending connect message: {connect_request}")
             self.ws.send(json.dumps(connect_request))
             
-            # Wait for connected response with timeout
+            # Wait for connected response
             self.ws.settimeout(5)
             connect_response = json.loads(self.ws.recv())
             logger.debug(f"Received response: {connect_response}")
@@ -201,8 +200,9 @@ class TrueNASWebSocketAPI:
         call_id = self.call_id
         self.call_id += 1
         
+        # Using proper JSON-RPC format
         request = {
-            "id": str(call_id),  # Convert to string to match DDP protocol
+            "id": str(call_id),
             "msg": "method",
             "method": method,
             "params": params or []
@@ -228,7 +228,7 @@ class TrueNASWebSocketAPI:
                         
                         return response.get("result")
                     
-                    # If not our response, log and continue waiting
+                    # If not our response, continue waiting
                     logger.debug(f"Received message with ID {response.get('id')}, expecting {call_id}")
                     
                 except websocket.WebSocketTimeoutException:
@@ -241,19 +241,22 @@ class TrueNASWebSocketAPI:
             return None
     
     def get_chart_releases(self):
-        logger.info("Fetching chart releases via WebSocket API...")
-        releases = self.call("chart.release.query")
+        """Get installed apps using the new 'app.query' endpoint"""
+        logger.info("Fetching apps via WebSocket API...")
+        releases = self.call("app.query")
         if releases:
-            logger.info(f"Retrieved {len(releases)} chart releases")
+            logger.info(f"Retrieved {len(releases)} apps")
         else:
-            logger.error("Failed to retrieve chart releases")
+            logger.error("Failed to retrieve apps")
         return releases
     
     def upgrade_chart_release(self, release_name):
+        """Upgrade an app using the new 'app.upgrade' endpoint"""
         logger.info(f"Triggering upgrade for {release_name} via WebSocket API...")
-        return self.call("chart.release.upgrade", [release_name])
+        return self.call("app.upgrade", [release_name])
     
     def wait_for_job(self, job_id):
+        """Wait for a job to complete"""
         logger.info(f"Waiting for job {job_id} to complete...")
         return self.call("core.job_wait", [job_id])
 
@@ -355,7 +358,14 @@ def update_charts():
     
     # Step 2: Filter releases that need an update
     def needs_update(release):
-        return release.get("update_available") or release.get("container_images_update_available")
+        # Check for various update indicators across different TrueNAS versions
+        return (
+            release.get("update_available", False) or 
+            release.get("container_images_update_available", False) or
+            release.get("update_available_train", False) or
+            release.get("outdated", False) or
+            release.get("needs_update", False)
+        )
     
     releases_to_upgrade = [r for r in releases if needs_update(r)]
     
@@ -364,24 +374,33 @@ def update_charts():
     else:
         logger.info(f"Found {len(releases_to_upgrade)} chart release(s) that need an update:")
         for r in releases_to_upgrade:
-            name = r.get("release_name") or r.get("config", {}).get("release_name") or r.get("id")
+            # Try to find the name using various field names across different TrueNAS versions
+            name = (
+                r.get("name") or 
+                r.get("release_name") or 
+                r.get("id") or
+                r.get("app_name") or
+                "unknown"
+            )
             logger.info(f"  - {name}")
     
     update_count = 0
     
     # Step 3: Loop over each release and trigger an upgrade
     for release in releases_to_upgrade:
-        # Try to use the release_name from the top-level, then from config, then fall back to the "id"
+        # Get the release identifier based on the API version
         release_identifier = (
-            release.get("release_name")
-            or release.get("config", {}).get("release_name")
-            or release.get("id")
+            release.get("name") or
+            release.get("release_name") or
+            release.get("config", {}).get("release_name") or
+            release.get("id") or
+            release.get("app_name")
         )
         if not release_identifier:
             logger.warning("Found a release without a valid identifier; skipping.")
             continue
         
-        logger.info(f"Upgrading chart release {release_identifier}...")
+        logger.info(f"Upgrading release {release_identifier}...")
         
         job_id = api_client.upgrade_chart_release(release_identifier)
         
