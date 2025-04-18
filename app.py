@@ -126,15 +126,15 @@ def detect_truenas_version():
         logger.info("Falling back to REST API")
         return "rest", "unknown"
 
-# WebSocket API implementation
+# WebSocket API implementation - updated for TrueNAS 25.04+
 class TrueNASWebSocketAPI:
     def __init__(self, base_url, api_key):
-        # Convert the base URL to WebSocket URL
         ws_url = base_url.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
         self.ws_url = f"{ws_url}/websocket"
         self.api_key = api_key
         self.ws = None
         self.call_id = 1
+        self.connected = False
         logger.info(f"Initializing WebSocket API client at {self.ws_url}")
         
     def connect(self):
@@ -144,8 +144,32 @@ class TrueNASWebSocketAPI:
                 self.ws_url,
                 header={"Authorization": f"Bearer {self.api_key}"}
             )
-            logger.info("Connected to TrueNAS WebSocket API successfully")
-            return True
+            
+            # Handle initial hello message
+            hello = json.loads(self.ws.recv())
+            logger.debug(f"Received initial message: {hello}")
+            
+            # Send connect message
+            connect_request = {
+                "id": self.call_id,
+                "msg": "connect",
+                "version": "1",
+                "support": ["1"]
+            }
+            self.call_id += 1
+            self.ws.send(json.dumps(connect_request))
+            
+            # Process connect response
+            connect_response = json.loads(self.ws.recv())
+            
+            if connect_response.get("msg") == "connected":
+                self.connected = True
+                logger.info("Connected to TrueNAS WebSocket API successfully")
+                return True
+            else:
+                logger.error(f"Failed to connect: {connect_response}")
+                return False
+                
         except Exception as e:
             logger.error(f"Failed to connect to WebSocket: {str(e)}")
             return False
@@ -153,10 +177,11 @@ class TrueNASWebSocketAPI:
     def disconnect(self):
         if self.ws:
             self.ws.close()
+            self.connected = False
             logger.info("Disconnected from TrueNAS WebSocket API")
     
     def call(self, method, params=None):
-        if not self.ws:
+        if not self.connected:
             if not self.connect():
                 return None
         
@@ -171,21 +196,23 @@ class TrueNASWebSocketAPI:
         }
         
         try:
-            logger.debug(f"Sending WebSocket call: {method}")
+            logger.debug(f"Sending method call: {method} (ID: {call_id})")
             self.ws.send(json.dumps(request))
-            response = json.loads(self.ws.recv())
             
-            if response.get("id") != call_id:
-                logger.error("Received response with mismatched ID")
-                return None
-            
-            if "error" in response:
-                logger.error(f"API error: {response['error']}")
-                return None
-            
-            return response.get("result")
+            while True:
+                response = json.loads(self.ws.recv())
+                
+                if response.get("id") == call_id:
+                    if "error" in response:
+                        logger.error(f"API error: {response['error']}")
+                        return None
+                    
+                    return response.get("result")
+                
+                logger.debug(f"Received message with ID {response.get('id')}, expecting {call_id}")
         except Exception as e:
             logger.error(f"WebSocket call failed: {str(e)}")
+            self.connected = False
             return None
     
     def get_chart_releases(self):
