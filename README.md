@@ -178,6 +178,3 @@ MIT
 
 ## Disclaimer
 This tool automatically updates your TrueNAS SCALE apps without manual intervention. While convenient, this could potentially lead to issues if an update introduces problems. Use at your own risk and make sure you have proper backups!
-
-Cheers,  
-[regix1](https://github.com/regix1)
